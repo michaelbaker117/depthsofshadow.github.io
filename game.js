@@ -336,14 +336,26 @@ function genDungeon(f, isSanc = false) {
     if (rooms.length > 1) plc(1, T.FOUNTAIN);
     plc(rooms.length > 1 ? 1 : 0, T.SHOP);
   } else {
-    for (let i = 0; i < rng(3, 5 + Math.floor(f / 6)); i++) plc(rng(1, Math.max(1, bri - 1)), T.CHEST);
+    for (let i = 0; i < rng(5, 8 + Math.floor(f / 4)); i++) plc(rng(1, Math.max(1, bri - 1)), T.CHEST);
     for (let i = 0; i < rng(3, 5 + Math.floor(f / 5)); i++) plc(rng(1, Math.max(1, bri - 1)), T.TRAP);
     for (let i = 0; i < rng(0, 2); i++) plc(rng(1, Math.max(1, bri - 1)), T.FOUNTAIN);
     for (let i = 0; i < rng(1, Math.floor(f / 8) + 3); i++) plc(rng(1, Math.max(1, bri - 1)), fc.haz);
     if (!isMega && rooms.length > 3) {
-      for (let i = 0; i < rng(1, 2); i++) {
-        const ri = rng(1, Math.max(1, bri - 2));
-        plc(ri, T.BARRIER);
+      const corridors = [];
+      const deadEnds = [];
+      for (let y = 2; y < MH - 2; y++) for (let x = 2; x < MW - 2; x++) {
+        if (map[y][x] !== T.FLOOR) continue;
+        if (bossPos && Math.abs(x - bossPos.x) + Math.abs(y - bossPos.y) < 4) continue;
+        if (stairsPos && Math.abs(x - stairsPos.x) + Math.abs(y - stairsPos.y) < 3) continue;
+        if (x === rooms[0].cx && y === rooms[0].cy) continue;
+        const adj = [[0, -1], [0, 1], [-1, 0], [1, 0]].filter(([dx, dy]) => map[y + dy] && map[y + dy][x + dx] === T.FLOOR).length;
+        if (adj === 1) deadEnds.push({ x, y });
+        else if (adj === 2) corridors.push({ x, y });
+      }
+      const candidates = deadEnds.length > 0 ? deadEnds : corridors;
+      if (candidates.length > 0) {
+        const pick = candidates[rng(0, candidates.length - 1)];
+        map[pick.y][pick.x] = T.BARRIER;
       }
     }
   }
@@ -357,8 +369,10 @@ function genSubArea(f) {
   const rooms = [];
   const ox = Math.floor(MW / 4), oy = Math.floor(MH / 4);
   const sw = Math.floor(MW / 2), sh = Math.floor(MH / 2);
-  for (let a = 0; a < 60; a++) {
-    if (rooms.length >= rng(3, 5)) break;
+  const type = rng(1, 3);
+  const numRooms = type === 2 ? 2 : rng(3, 5);
+  for (let a = 0; a < 80; a++) {
+    if (rooms.length >= numRooms) break;
     const rw = rng(4, 7), rh = rng(3, 5), rx = ox + rng(1, sw - rw - 2), ry = oy + rng(1, sh - rh - 2);
     let ok = true;
     for (const r of rooms) if (rx < r.x + r.w + 2 && rx + rw + 2 > r.x && ry < r.y + r.h + 2 && ry + rh + 2 > r.y) {
@@ -401,16 +415,35 @@ function genSubArea(f) {
     }
     return null;
   };
-  plc(0, T.PORTAL);
   const lri = rooms.length - 1;
-  for (let i = 0; i < rng(2, 4); i++) plc(lri, T.CHEST);
-  for (let i = 0; i < rng(2, 4); i++) plc(rng(0, lri), T.TRAP);
-  const hasMini = Math.random() < 0.5;
-  const miniPos = hasMini ? { x: rooms[lri].cx, y: rooms[lri].cy } : null;
+  plc(lri, T.PORTAL);
+  let hasMini = false, miniPos = null;
+  const typeNames = ["", "Treasure Vault", "Mini-Boss Lair", "Trap Gauntlet"];
+  if (type === 1) {
+    for (let i = 0; i < rng(4, 6); i++) plc(lri, T.CHEST);
+    if (rooms.length > 2) for (let i = 0; i < rng(1, 3); i++) plc(rng(1, lri - 1), T.CHEST);
+    plc(lri, T.FOUNTAIN);
+  } else if (type === 2) {
+    hasMini = true;
+    miniPos = { x: rooms[lri].cx, y: rooms[lri].cy };
+    plc(lri, T.CHEST);
+    plc(lri, T.CHEST);
+  } else {
+    for (let ri = 0; ri < lri; ri++) {
+      for (let i = 0; i < rng(3, 5); i++) plc(ri, T.TRAP);
+    }
+    for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
+      if (map[y][x] !== T.FLOOR) continue;
+      const adj = [[0, -1], [0, 1], [-1, 0], [1, 0]].filter(([dx, dy]) => map[y + dy] && map[y + dy][x + dx] === T.FLOOR).length;
+      if (adj === 2 && Math.random() < 0.25) map[y][x] = T.TRAP;
+    }
+    for (let i = 0; i < rng(3, 5); i++) plc(lri, T.CHEST);
+    plc(lri, T.FOUNTAIN);
+  }
   const rev = Array.from({ length: MH }, () => Array(MW).fill(false));
   const start = { x: rooms[0].cx, y: rooms[0].cy };
   map[start.y][start.x] = T.FLOOR;
-  return { map, rooms, revealed: rev, start, miniPos, hasMini, fc: { ...fc, name: "Hidden Area", icon: "\u{1F52E}" }, isSub: true, bossPos: miniPos, bri: lri };
+  return { map, rooms, revealed: rev, start, miniPos, hasMini, fc: { ...fc, name: typeNames[type], icon: "\u{1F52E}" }, isSub: true, subType: type, bossPos: miniPos, bri: lri };
 }
 function getMiniBoss(f) {
   const t = getTier(f);
@@ -1334,7 +1367,7 @@ function Game() {
     setWand((p) => p.filter((w) => w.id !== e.id));
     setStats((p) => ({ ...p, kills: p.kills + 1, totG: p.totG + e.gold, megaK: p.megaK + (e.isMega ? 1 : 0), erebus: p.erebus || e.name === "Erebus" }));
     log(`${e.isBoss ? "\u{1F3C6}" : "\u2694\uFE0F"} ${e.name}! +${xpG}xp +${e.gold}g`, "victory");
-    if (!e.isBoss && Math.random() < 0.25) {
+    {
       const l = getChestLoot(player.floor);
       setPlayer((p) => ({ ...p, inv: [...p.inv, l] }));
       log(`Drop: ${l.icon} ${l.name}`, "loot");
@@ -1453,26 +1486,31 @@ function Game() {
     }
     if (tile === T.PORTAL) {
       if (subArea) {
-        setDun(subArea.parentDun);
+        const pd = subArea.parentDun;
+        if (subArea.entrancePos) {
+          const nm = pd.map.map((r) => [...r]);
+          nm[subArea.entrancePos.y][subArea.entrancePos.x] = T.FLOOR;
+          pd.map = nm;
+        }
+        setDun(pd);
         setPlayer((p) => ({ ...p, x: subArea.parentPos.x, y: subArea.parentPos.y }));
         setWand(subArea.parentWand || []);
         setSubArea(null);
         SFX.sanctuary();
         flash("heal");
-        log("\u{1F52E} Returned from hidden area!", "system");
+        log("\u{1F52E} Returned \u2014 portal sealed behind you.", "system");
         return;
       } else {
         const sub = genSubArea(player.floor);
         sub.revealed = revA(sub.revealed, sub.start.x, sub.start.y, player.vr + player.torchB);
         const parentWand = [...wand];
-        setSubArea({ parentDun: dun, parentPos: { x: player.x, y: player.y }, parentWand });
+        setSubArea({ parentDun: dun, parentPos: { x: player.x, y: player.y }, parentWand, entrancePos: { x: nx, y: ny } });
         setDun(sub);
         setPlayer((p) => ({ ...p, x: sub.start.x, y: sub.start.y }));
-        const subEnemies = sub.hasMini ? [] : [];
-        setWand(subEnemies);
+        setWand([]);
         SFX.boss();
         flash("loot");
-        log("\u{1F52E} Entered hidden sub-area!", "system");
+        log(`\u{1F52E} Entered ${sub.fc.name}!`, "system");
         return;
       }
     }
@@ -1502,10 +1540,6 @@ function Game() {
     const hit = wand.find((e) => e.x === nx && e.y === ny);
     if (hit) {
       startCombat(hit);
-      return;
-    }
-    if (!inSanc && !subArea && bossAlive && tile === T.FLOOR && Math.random() < 0.08) {
-      startCombat(getEnemy(player.floor));
       return;
     }
     if (player.poisoned) setPlayer((p) => ({ ...p, hp: Math.max(1, p.hp - 2) }));
@@ -1733,7 +1767,7 @@ function Game() {
       miniDots.push(/* @__PURE__ */ React.createElement("div", { key: `${x}-${y}`, style: { position: "absolute", left: x * mmS, top: y * mmS, width: mmS, height: mmS, background: c } }));
     }
   }
-  return /* @__PURE__ */ React.createElement("div", { style: { width: "100vw", height: "100dvh", overflow: "hidden", background: "#000", position: "relative", userSelect: "none" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 0, bottom: 0, left: "env(safe-area-inset-left,0px)", right: "env(safe-area-inset-right,0px)", overflow: "hidden", background: fc.bg, color: "#c8c8d0", fontFamily: "'JetBrains Mono',monospace" } }, /* @__PURE__ */ React.createElement("style", null, CSS, `:root{--ac:${fc.accent};}`), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", animation: shaking ? "shake .2s" : inSanc ? "sancP 4s infinite" : "none" } }, /* @__PURE__ */ React.createElement("table", { style: { borderCollapse: "collapse" } }, /* @__PURE__ */ React.createElement("tbody", null, mapRows))), vfx.flash && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none", animation: "dmgFlash .3s forwards", background: vfx.flash === "damage" ? "rgba(255,40,40,.15)" : vfx.flash === "heal" ? "rgba(40,255,100,.12)" : "rgba(255,200,40,.12)" } }), vfx.particles.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: "50%", left: "50%", zIndex: 4, pointerEvents: "none" } }, vfx.particles.map((p) => /* @__PURE__ */ React.createElement("div", { key: p.id, style: { position: "absolute", width: 6, height: 6, borderRadius: "50%", background: p.color, boxShadow: `0 0 4px ${p.color}`, animation: `particle ${p.dur}s ease-out forwards`, "--px": `${p.px}px`, "--py": `${p.py}px` } }))), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: isDesk ? 16 : 6, left: isDesk ? 16 : 6, zIndex: 10, display: "flex", flexDirection: "column", gap: isDesk ? Math.round(5 * uiS) : 3, width: isDesk ? Math.round(180 * uiS) : 160, pointerEvents: "none" } }, /* @__PURE__ */ React.createElement(Bar, { cur: player.hp, max: player.maxHp, color: "#c33", label: "HP", h: isDesk ? Math.round(12 * uiS) : 8 }), /* @__PURE__ */ React.createElement(Bar, { cur: player.mp, max: player.maxMp, color: "#36c", label: "MP", h: isDesk ? Math.round(12 * uiS) : 8 }), /* @__PURE__ */ React.createElement(Bar, { cur: player.xp, max: xpFor(player.level), color: "#74a", label: "XP", h: isDesk ? Math.round(10 * uiS) : 6 }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: isDesk ? Math.round(10 * uiS) : 8, color: "#888", paddingTop: 1 } }, /* @__PURE__ */ React.createElement("span", null, fc.icon, " F", player.floor, " Lv", player.level), /* @__PURE__ */ React.createElement("span", null, "\u{1F441}", player.vr + player.torchB, "/", player.vr + 3, " \u{1F4B0}", player.gold))), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: isDesk ? 16 : 6, right: isDesk ? 16 : 6, zIndex: 20, display: "flex", flexDirection: "column", gap: isDesk ? 6 : 4, alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { onClick: () => setMenu((m) => m ? null : "open"), style: { width: isDesk ? Math.round(40 * uiS) : 42, height: isDesk ? Math.round(40 * uiS) : 42, borderRadius: 10, background: "rgba(14,14,22,.65)", border: `1px solid ${fc.accent}33`, color: menu ? fc.accent : "#888", fontSize: isDesk ? Math.round(18 * uiS) : 18, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)", touchAction: "manipulation", position: "relative" } }, menu ? "\u2715" : "\u2630", hasRec && !menu && /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: "#4c6", animation: "recB 1.5s infinite" } })), menu === "open" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: isDesk ? 5 : 3, animation: "fadeUp .15s" } }, [["stats", "\u{1F4CA} Stats"], ["inv", "\u{1F392} Inventory"], ["armory", "\u{1F3DB}\uFE0F Armory"], ["obj", "\u{1F4DC} Quests"], ["log", "\u{1F4CB} Event Log"], ["settings", "\u2699\uFE0F Settings"]].map(([k, lb]) => /* @__PURE__ */ React.createElement("button", { key: k, onClick: () => setMenu(k), style: { padding: isDesk ? `${Math.round(10 * uiS)}px ${Math.round(16 * uiS)}px` : "8px 14px", borderRadius: 8, background: "rgba(14,14,22,.8)", border: "1px solid #2a2a3a", color: "#aaa", fontSize: isDesk ? Math.round(12 * uiS) : 11, cursor: "pointer", backdropFilter: "blur(6px)", textAlign: "left", fontFamily: "'JetBrains Mono',monospace", touchAction: "manipulation", whiteSpace: "nowrap" } }, lb)))), settings.minimap && !menu && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: isDesk ? Math.round(56 * uiS) : 54, right: isDesk ? 16 : 6, width: MW * mmS + 2, height: MH * mmS + 2, background: "rgba(6,6,12,.55)", border: `1px solid ${fc.wall}33`, borderRadius: 4, overflow: "hidden", zIndex: 8 } }, miniDots), inSanc && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", padding: "3px 12px", background: "rgba(30,60,80,.35)", border: "1px solid #48a3", borderRadius: 8, fontSize: 9, color: "#6bd", zIndex: 10, backdropFilter: "blur(4px)" } }, "\u{1F3D5}\uFE0F SANCTUARY"), subArea && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", padding: "3px 12px", background: "rgba(80,30,80,.35)", border: "1px solid #d4f3", borderRadius: 8, fontSize: 9, color: "#d8f", zIndex: 10, backdropFilter: "blur(4px)" } }, "\u{1F52E} HIDDEN AREA", dun?.hasMini ? " \xB7 \u26A0\uFE0F Mini-Boss" : ""), !inSanc && !subArea && bossAlive && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", padding: "3px 10px", background: "rgba(160,20,50,.25)", border: "1px solid #8233", borderRadius: 8, fontSize: 9, color: "#d46", zIndex: 10, backdropFilter: "blur(4px)" } }, player.floor % 10 === 0 ? "\u{1F451} MEGA BOSS" : "\u{1F479} BOSS"), /* @__PURE__ */ React.createElement("div", { ref: logRef, className: "scr", style: { position: "absolute", bottom: isDesk ? 16 : 140, left: isDesk ? 16 : 6, maxWidth: isDesk ? Math.round(280 * uiS) : 180, maxHeight: isDesk ? Math.round(50 * uiS) : 32, overflowY: "auto", zIndex: 8, pointerEvents: "none" } }, eLog.slice(isDesk ? -5 : -3).map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { fontSize: isDesk ? Math.round(10 * uiS) : 7, color: logCol(e.ty), opacity: i === Math.min(eLog.length - 1, isDesk ? 4 : 2) ? 1 : 0.4, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: "0 1px 4px #000" } }, e.m))), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", bottom: isDesk ? Math.round(68 * uiS) : 174, left: isDesk ? 16 : 6, fontSize: isDesk ? Math.round(9 * uiS) : 7, color: "#444", zIndex: 7, pointerEvents: "none", textShadow: "0 1px 3px #000" } }, inSanc ? "Sanctuary" : fc.name), !isDesk && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", bottom: 6, right: 6, zIndex: 15 } }, /* @__PURE__ */ React.createElement(DPad, { accent: fc.accent, onDir: move, combatActive: !!combat || !!shop })), menu && menu !== "open" && /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.5)", backdropFilter: "blur(4px)" }, onClick: () => setMenu(null) }, /* @__PURE__ */ React.createElement("div", { className: "scr", style: { width: isDesk ? 440 : Math.min(360, winSize.w - 32), maxHeight: isDesk ? "85vh" : "80vh", background: "rgba(12,12,20,.97)", border: `1px solid ${fc.accent}22`, borderRadius: 14, overflowY: "auto", padding: isDesk ? "24px 22px" : "18px 14px", animation: "fadeUp .2s ease", boxShadow: `0 8px 40px rgba(0,0,0,.6), 0 0 20px ${fc.accent}08` }, onClick: (e) => e.stopPropagation() }, menu === "stats" && (() => {
+  return /* @__PURE__ */ React.createElement("div", { style: { width: "100vw", height: "100dvh", overflow: "hidden", background: "#000", position: "relative", userSelect: "none" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 0, bottom: 0, left: "env(safe-area-inset-left,0px)", right: "env(safe-area-inset-right,0px)", overflow: "hidden", background: fc.bg, color: "#c8c8d0", fontFamily: "'JetBrains Mono',monospace" } }, /* @__PURE__ */ React.createElement("style", null, CSS, `:root{--ac:${fc.accent};}`), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", animation: shaking ? "shake .2s" : inSanc ? "sancP 4s infinite" : "none" } }, /* @__PURE__ */ React.createElement("table", { style: { borderCollapse: "collapse" } }, /* @__PURE__ */ React.createElement("tbody", null, mapRows))), vfx.flash && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 3, pointerEvents: "none", animation: "dmgFlash .3s forwards", background: vfx.flash === "damage" ? "rgba(255,40,40,.15)" : vfx.flash === "heal" ? "rgba(40,255,100,.12)" : "rgba(255,200,40,.12)" } }), vfx.particles.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: "50%", left: "50%", zIndex: 4, pointerEvents: "none" } }, vfx.particles.map((p) => /* @__PURE__ */ React.createElement("div", { key: p.id, style: { position: "absolute", width: 6, height: 6, borderRadius: "50%", background: p.color, boxShadow: `0 0 4px ${p.color}`, animation: `particle ${p.dur}s ease-out forwards`, "--px": `${p.px}px`, "--py": `${p.py}px` } }))), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: isDesk ? 16 : 6, left: isDesk ? 16 : 6, zIndex: 10, display: "flex", flexDirection: "column", gap: isDesk ? Math.round(5 * uiS) : 3, width: isDesk ? Math.round(180 * uiS) : 160, pointerEvents: "none" } }, /* @__PURE__ */ React.createElement(Bar, { cur: player.hp, max: player.maxHp, color: "#c33", label: "HP", h: isDesk ? Math.round(12 * uiS) : 8 }), /* @__PURE__ */ React.createElement(Bar, { cur: player.mp, max: player.maxMp, color: "#36c", label: "MP", h: isDesk ? Math.round(12 * uiS) : 8 }), /* @__PURE__ */ React.createElement(Bar, { cur: player.xp, max: xpFor(player.level), color: "#74a", label: "XP", h: isDesk ? Math.round(10 * uiS) : 6 }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: isDesk ? Math.round(10 * uiS) : 8, color: "#888", paddingTop: 1 } }, /* @__PURE__ */ React.createElement("span", null, fc.icon, " F", player.floor, " Lv", player.level), /* @__PURE__ */ React.createElement("span", null, "\u{1F441}", player.vr + player.torchB, "/", player.vr + 3, " \u{1F4B0}", player.gold))), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: isDesk ? 16 : 6, right: isDesk ? 16 : 6, zIndex: 20, display: "flex", flexDirection: "column", gap: isDesk ? 6 : 4, alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement("button", { onClick: () => setMenu((m) => m ? null : "open"), style: { width: isDesk ? Math.round(40 * uiS) : 42, height: isDesk ? Math.round(40 * uiS) : 42, borderRadius: 10, background: "rgba(14,14,22,.65)", border: `1px solid ${fc.accent}33`, color: menu ? fc.accent : "#888", fontSize: isDesk ? Math.round(18 * uiS) : 18, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)", touchAction: "manipulation", position: "relative" } }, menu ? "\u2715" : "\u2630", hasRec && !menu && /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: "#4c6", animation: "recB 1.5s infinite" } })), menu === "open" && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: isDesk ? 5 : 3, animation: "fadeUp .15s" } }, [["stats", "\u{1F4CA} Stats"], ["inv", "\u{1F392} Inventory"], ["armory", "\u{1F3DB}\uFE0F Armory"], ["obj", "\u{1F4DC} Quests"], ["log", "\u{1F4CB} Event Log"], ["settings", "\u2699\uFE0F Settings"]].map(([k, lb]) => /* @__PURE__ */ React.createElement("button", { key: k, onClick: () => setMenu(k), style: { padding: isDesk ? `${Math.round(10 * uiS)}px ${Math.round(16 * uiS)}px` : "8px 14px", borderRadius: 8, background: "rgba(14,14,22,.8)", border: "1px solid #2a2a3a", color: "#aaa", fontSize: isDesk ? Math.round(12 * uiS) : 11, cursor: "pointer", backdropFilter: "blur(6px)", textAlign: "left", fontFamily: "'JetBrains Mono',monospace", touchAction: "manipulation", whiteSpace: "nowrap" } }, lb)))), settings.minimap && !menu && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: isDesk ? Math.round(56 * uiS) : 54, right: isDesk ? 16 : 6, width: MW * mmS + 2, height: MH * mmS + 2, background: "rgba(6,6,12,.55)", border: `1px solid ${fc.wall}33`, borderRadius: 4, overflow: "hidden", zIndex: 8 } }, miniDots), inSanc && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", padding: "3px 12px", background: "rgba(30,60,80,.35)", border: "1px solid #48a3", borderRadius: 8, fontSize: 9, color: "#6bd", zIndex: 10, backdropFilter: "blur(4px)" } }, "\u{1F3D5}\uFE0F SANCTUARY"), subArea && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", padding: "3px 12px", background: "rgba(80,30,80,.35)", border: "1px solid #d4f3", borderRadius: 8, fontSize: 9, color: "#d8f", zIndex: 10, backdropFilter: "blur(4px)" } }, "\u{1F52E} ", dun?.fc?.name || "Hidden Area"), !inSanc && !subArea && bossAlive && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", top: 6, left: "50%", transform: "translateX(-50%)", padding: "3px 10px", background: "rgba(160,20,50,.25)", border: "1px solid #8233", borderRadius: 8, fontSize: 9, color: "#d46", zIndex: 10, backdropFilter: "blur(4px)" } }, player.floor % 10 === 0 ? "\u{1F451} MEGA BOSS" : "\u{1F479} BOSS"), /* @__PURE__ */ React.createElement("div", { ref: logRef, className: "scr", style: { position: "absolute", bottom: isDesk ? 16 : 140, left: isDesk ? 16 : 6, maxWidth: isDesk ? Math.round(280 * uiS) : 180, maxHeight: isDesk ? Math.round(50 * uiS) : 32, overflowY: "auto", zIndex: 8, pointerEvents: "none" } }, eLog.slice(isDesk ? -5 : -3).map((e, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { fontSize: isDesk ? Math.round(10 * uiS) : 7, color: logCol(e.ty), opacity: i === Math.min(eLog.length - 1, isDesk ? 4 : 2) ? 1 : 0.4, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: "0 1px 4px #000" } }, e.m))), /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", bottom: isDesk ? Math.round(68 * uiS) : 174, left: isDesk ? 16 : 6, fontSize: isDesk ? Math.round(9 * uiS) : 7, color: "#444", zIndex: 7, pointerEvents: "none", textShadow: "0 1px 3px #000" } }, inSanc ? "Sanctuary" : fc.name), !isDesk && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", bottom: 6, right: 6, zIndex: 15 } }, /* @__PURE__ */ React.createElement(DPad, { accent: fc.accent, onDir: move, combatActive: !!combat || !!shop })), menu && menu !== "open" && /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.5)", backdropFilter: "blur(4px)" }, onClick: () => setMenu(null) }, /* @__PURE__ */ React.createElement("div", { className: "scr", style: { width: isDesk ? 440 : Math.min(360, winSize.w - 32), maxHeight: isDesk ? "85vh" : "80vh", background: "rgba(12,12,20,.97)", border: `1px solid ${fc.accent}22`, borderRadius: 14, overflowY: "auto", padding: isDesk ? "24px 22px" : "18px 14px", animation: "fadeUp .2s ease", boxShadow: `0 8px 40px rgba(0,0,0,.6), 0 0 20px ${fc.accent}08` }, onClick: (e) => e.stopPropagation() }, menu === "stats" && (() => {
     const eqW = player.equipped.weapon;
     const eqA = player.equipped.armor;
     const pct = Math.round(player.xp / xpFor(player.level) * 100);
