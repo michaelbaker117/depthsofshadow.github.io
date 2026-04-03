@@ -1675,51 +1675,6 @@ function Game() {
     if (player.poisoned) setPlayer((p) => ({ ...p, hp: Math.max(1, p.hp - 2) }));
     if (!inSanc) moveW();
   }, [player, dun, combat, menu, shop, wand, bossAlive, inSanc, subArea, nextFloor, startCombat, moveW, log, shk]);
-  useEffect(() => {
-    const h = (e) => {
-      if (screen !== "game") return;
-      const k = e.key.toLowerCase();
-      if (shop) {
-        if (e.key === "Escape") setShop(null);
-        return;
-      }
-      if (combat) {
-        if (combat.phase === "won" && (e.key === "Enter" || e.key === " ")) claimWin();
-        if (combat.phase === "lost" && (e.key === "Enter" || e.key === " ")) handleDeath();
-        return;
-      }
-      if (menu) {
-        if (e.key === "Escape") setMenu(null);
-        return;
-      }
-      const moveKeys = { ArrowUp: [0, -1], w: [0, -1], W: [0, -1], ArrowDown: [0, 1], s: [0, 1], S: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0], ArrowRight: [1, 0], d: [1, 0], D: [1, 0] };
-      if (moveKeys[e.key]) {
-        e.preventDefault();
-        move(...moveKeys[e.key]);
-        return;
-      }
-      const isMove = "wasd".includes(k) || e.key.startsWith("Arrow");
-      if (!isMove) {
-        if (k === keybinds.inv) setMenu((x) => x === "inv" ? null : "inv");
-        else if (k === keybinds.stats) setMenu((x) => x === "stats" ? null : "stats");
-        else if (k === keybinds.quests) setMenu((x) => x === "obj" ? null : "obj");
-        else if (k === keybinds.armory) setMenu((x) => x === "armory" ? null : "armory");
-      }
-      if (e.key === "Escape") setMenu(null);
-      if (e.key === "F9") {
-        e.preventDefault();
-        saveGame();
-      }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [screen, combat, menu, shop, move, claimWin, handleDeath, keybinds, saveGame]);
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [eLog]);
-  useEffect(() => {
-    if (cLogRef.current) cLogRef.current.scrollTop = cLogRef.current.scrollHeight;
-  }, [cLog]);
   const [completedQuests, setCompletedQuests] = useState(() => /* @__PURE__ */ new Set());
   const saveGame = useCallback((slot) => {
     const sl = slot || activeSlot;
@@ -1774,6 +1729,51 @@ function Game() {
     setCInv(false);
     log("Loaded!", "system");
   }, [save, activeSlot, log]);
+  useEffect(() => {
+    const h = (e) => {
+      if (screen !== "game") return;
+      const k = e.key.toLowerCase();
+      if (shop) {
+        if (e.key === "Escape") setShop(null);
+        return;
+      }
+      if (combat) {
+        if (combat.phase === "won" && (e.key === "Enter" || e.key === " ")) claimWin();
+        if (combat.phase === "lost" && (e.key === "Enter" || e.key === " ")) handleDeath();
+        return;
+      }
+      if (menu) {
+        if (e.key === "Escape") setMenu(null);
+        return;
+      }
+      const moveKeys = { ArrowUp: [0, -1], w: [0, -1], W: [0, -1], ArrowDown: [0, 1], s: [0, 1], S: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0], ArrowRight: [1, 0], d: [1, 0], D: [1, 0] };
+      if (moveKeys[e.key]) {
+        e.preventDefault();
+        move(...moveKeys[e.key]);
+        return;
+      }
+      const isMove = "wasd".includes(k) || e.key.startsWith("Arrow");
+      if (!isMove) {
+        if (k === keybinds.inv) setMenu((x) => x === "inv" ? null : "inv");
+        else if (k === keybinds.stats) setMenu((x) => x === "stats" ? null : "stats");
+        else if (k === keybinds.quests) setMenu((x) => x === "obj" ? null : "obj");
+        else if (k === keybinds.armory) setMenu((x) => x === "armory" ? null : "armory");
+      }
+      if (e.key === "Escape") setMenu(null);
+      if (e.key === "F9") {
+        e.preventDefault();
+        saveGame();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [screen, combat, menu, shop, move, claimWin, handleDeath, keybinds, saveGame]);
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [eLog]);
+  useEffect(() => {
+    if (cLogRef.current) cLogRef.current.scrollTop = cLogRef.current.scrollHeight;
+  }, [cLog]);
   const qCheckRef = useRef(0);
   useEffect(() => {
     if (!player) return;
