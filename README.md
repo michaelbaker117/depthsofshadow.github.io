@@ -1,2 +1,2 @@
-# depthsofshadow.github.io
+# Depths of Shadow
 100 floor dungeon crawler
